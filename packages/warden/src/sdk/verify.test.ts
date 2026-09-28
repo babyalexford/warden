@@ -130,6 +130,24 @@ describe('verifyFindings', () => {
     }));
   });
 
+  it('lists the finding\'s own file in changed_files', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+      prContext: {
+        changedFiles: ['src/app.ts', 'src/guard.ts'],
+      },
+    });
+
+    const { userPrompt } = vi.mocked(runtime.runSkill).mock.calls[0]![0];
+    const changedFiles = userPrompt.match(/<changed_files>[\s\S]*?<\/changed_files>/)?.[0];
+    expect(changedFiles).toContain('- src/app.ts');
+    expect(changedFiles).toContain('- src/guard.ts');
+  });
+
   it('omits verifierRejections when nothing is rejected', async () => {
     const runtime = mockRuntime('{"verdict":"keep"}');
     vi.mocked(getRuntime).mockReturnValue(runtime);

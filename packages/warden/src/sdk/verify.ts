@@ -106,7 +106,9 @@ Use "finding" only for verdict "revise". For revised findings, return the comple
 function buildVerificationUserPrompt(finding: Finding, prContext?: PromptPRContext): string {
   return joinPromptSections([
     buildPullRequestContextSection(prContext),
-    buildChangedFilesSection(prContext, finding.location?.path),
+    // Unlike the hunk prompt, the verifier gets no diff, so the finding's own
+    // file must stay in the list or it reads as unchanged by the PR.
+    buildChangedFilesSection(prContext),
     buildTaggedSection('candidate_finding', JSON.stringify(finding, null, 2)),
     `<task>
 Verify this candidate. Return keep, revise, or reject.
