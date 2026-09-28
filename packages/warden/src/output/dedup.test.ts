@@ -19,6 +19,7 @@ import {
 } from './dedup.js';
 import type { Finding } from '../types/index.js';
 import type { ExistingComment } from './dedup.js';
+import * as runtimes from '../sdk/runtimes/index.js';
 
 describe('generateContentHash', () => {
   it('generates consistent 8-char hex hash', () => {
@@ -803,7 +804,7 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('does not group findings more than 5 lines apart', async () => {
+  it('keeps findings more than 5 lines apart in hashOnly mode', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
@@ -826,7 +827,7 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('does not group findings in different files', async () => {
+  it('keeps findings in different files in hashOnly mode', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
@@ -848,32 +849,51 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('skips LLM when no proximity clusters exist', async () => {
+  it('merges semantic duplicates across distant lines and files but retains unrelated findings', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
-      title: 'Bug A',
-      description: 'Description A',
+      title: 'Outputs bypass the privacy gate',
+      description: 'Both wrappers serialize answers even when output collection is disabled.',
       location: { path: 'src/file.ts', startLine: 10 },
     };
 
     const finding2: Finding = {
       id: 'f2',
       severity: 'medium',
-      title: 'Bug B',
-      description: 'Description B',
+      title: 'Output collection opt-out is ignored',
+      description: 'Check the output setting before writing answers in both wrappers.',
       location: { path: 'src/file.ts', startLine: 100 },
     };
 
-    // Even with an API key, no LLM call should be made since findings are far apart
-    const result = await consolidateBatchFindings([finding1, finding2], { apiKey: 'test-key' });
-    expect(result.findings).toHaveLength(2);
-    expect(result.removedCount).toBe(0);
-    expect(result.usage).toBeUndefined();
+    const finding3: Finding = {
+      ...finding2, id: 'f3', title: 'Evaluation answers recorded without consent',
+      location: { path: 'tests/file.test.ts', startLine: 200 },
+    };
+    const unrelated: Finding = {
+      ...finding1, id: 'f4', title: 'Score probabilities and legend can misalign',
+      description: 'Independent dictionary iteration can pair probabilities with the wrong labels.',
+    };
+    const locationless: Finding = { ...finding1, id: 'f5', location: undefined };
+    const runAuxiliary = vi.fn().mockResolvedValue({
+      success: true, data: [[1, 2, 3]],
+      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+    });
+    vi.spyOn(runtimes, 'getRuntime').mockReturnValue({
+      name: 'pi', runAuxiliary,
+    } as unknown as ReturnType<typeof runtimes.getRuntime>);
+
+    const result = await consolidateBatchFindings([locationless, finding1, finding2, finding3, unrelated], { runtime: 'pi' });
+    expect(result.findings).toEqual([
+      locationless,
+      { ...finding1, additionalLocations: [finding2.location, finding3.location] },
+      unrelated,
+    ]);
+    expect(result.removedCount).toBe(2);
+    expect(result.removedFindings).toEqual([finding2, finding3]);
   });
 
-  it('groups findings within 5 lines of each other for proximity check', async () => {
-    // This tests the proximity grouping logic (without LLM since no API key)
+  it('keeps nearby findings when runtime authentication is unavailable', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
