@@ -1,4 +1,16 @@
 # Changelog
+## 0.50.0
+
+### New Features ✨
+
+- (dashboard) Redesign findings workspace and add automatic themes by @gricha in [#533](https://github.com/getsentry/warden/pull/533)
+
+### Bug Fixes 🐛
+
+- (ci) Load org config for Warden self-review by @sentry-junior in [#537](https://github.com/getsentry/warden/pull/537)
+- (dashboard) Open Usage first and make tab changes immediate by @gricha in [#534](https://github.com/getsentry/warden/pull/534)
+- (dedup) Group findings by semantic bug identity by @sentry-junior in [#536](https://github.com/getsentry/warden/pull/536)
+
 ## 0.49.0
 
 ### New Features ✨
